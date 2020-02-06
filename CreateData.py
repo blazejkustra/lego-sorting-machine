@@ -32,7 +32,6 @@ cv2.createTrackbar("second","options",20,250,empty)
 ######################################################
 
 
-
 def FolderToSave():
     global countFolder
     countFolder = 0
