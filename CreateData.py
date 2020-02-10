@@ -2,158 +2,113 @@ import cv2
 import numpy as np
 import os
 import time
+import StackImages
 
 #####################################################
 
-myPath = 'data/images'  # Rasbperry Pi:  '/home/pi/Desktop/data/images'
-cameraBrightness = 180
-moduleVal = 1  # SAVE EVERY ITH FRAME TO AVOID REPETITION
-minBlur = 40  # SMALLER VALUE MEANS MORE BLURRINESS PRESENT
-minArea = 100
-saveData = True  # SAVE DATA FLAG
+path_images = 'data/images'
+minimal_blur = 40  # SMALLER VALUE MEANS MORE BLURRINESS
+minimal_area = 100
 scale = 0.25
-scaleSaved = 0.5
+scale_saved_images = 0.5
+count = 0
+count_saved_images = 0
+save_data = True
+font = cv2.FONT_HERSHEY_SIMPLEX
 
 ######################################################
 
 cap = cv2.VideoCapture(0)
 
-
-def empty(a): pass
-
-
-# CREATE TRACKBAR
-cv2.namedWindow("options")
-cv2.resizeWindow("options",200,300)
-cv2.createTrackbar("first","options",45,250,empty)
-cv2.createTrackbar("kernalv","options",5,10,empty)
-cv2.createTrackbar("second","options",20,250,empty)
-
 ######################################################
 
 
-def FolderToSave():
-    global countFolder
-    countFolder = 0
-    while os.path.exists(myPath + str(countFolder)):
-        countFolder += 1
-    os.makedirs(myPath + str(countFolder))
+def folderToSave():
+    global count_folder
+    count_folder = 0
+    while os.path.exists(path_images + str(count_folder)):
+        count_folder += 1
+    os.makedirs(path_images + str(count_folder))
 
 
-def stackImages(scale, imgArray):
-    rows = len(imgArray)
-    cols = len(imgArray[0])
-    rowsAvailable = isinstance(imgArray[0], list)
-    width = imgArray[0][0].shape[1]
-    height = imgArray[0][0].shape[0]
-    if rowsAvailable:
-        for x in range(0, rows):
-            for y in range(0, cols):
-                if imgArray[x][y].shape[:2] == imgArray[0][0].shape[:2]:
-                    imgArray[x][y] = cv2.resize(imgArray[x][y], (0, 0), None, scale, scale)
-                else:
-                    imgArray[x][y] = cv2.resize(imgArray[x][y], (imgArray[0][0].shape[1], imgArray[0][0].shape[0]),
-                                                None, scale, scale)
-                if len(imgArray[x][y].shape) == 2: imgArray[x][y] = cv2.cvtColor(imgArray[x][y], cv2.COLOR_GRAY2BGR)
-        imageBlank = np.zeros((height, width, 3), np.uint8)
-        hor = [imageBlank] * rows
-        hor_con = [imageBlank] * rows
-        for x in range(0, rows):
-            hor[x] = np.hstack(imgArray[x])
-        ver = np.vstack(hor)
-    else:
-        for x in range(0, rows):
-            if imgArray[x].shape[:2] == imgArray[0].shape[:2]:
-                imgArray[x] = cv2.resize(imgArray[x], (0, 0), None, scale, scale)
-            else:
-                imgArray[x] = cv2.resize(imgArray[x], (imgArray[0].shape[1], imgArray[0].shape[0]), None, scale, scale)
-            if len(imgArray[x].shape) == 2: imgArray[x] = cv2.cvtColor(imgArray[x], cv2.COLOR_GRAY2BGR)
-        hor = np.hstack(imgArray)
-        ver = hor
-    return ver
+def scaleCoordinate(unscaled):
+    return int(unscaled / scale * scale_saved_images)
 
 
-def saveData(countSave):
-    contours, hierarchy = cv2.findContours(imgDil, cv2.RETR_EXTERNAL,
-                                           cv2.CHAIN_APPROX_NONE)  # CHAIN_APPROX_SIMPLE for better performance
+def saveData(count_saved_images, img, img_small, img_contour, img_box, img_dilate):
+    contours, hierarchy = cv2.findContours(img_dilate, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)  # CHAIN_APPROX_SIMPLE
 
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area > minArea:
-            cv2.drawContours(imgContour, cnt, -1, (255, 0, 255), 3)
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area > minimal_area:
+            cv2.drawContours(img_contour, contour, -1, (255, 0, 255), 3)
 
-            peri = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
             x, y, w, h = cv2.boundingRect(approx)
-            if y < int(80*scale) or y+h> int(1000*scale): continue
-            cv2.rectangle(imgBox, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
-            # https://docs.opencv.org/3.1.0/dd/d49/tutorial_py_contour_features.html
-            blur = cv2.Laplacian(imgSmall, cv2.CV_64F).var()
+            if y < int(80*scale) or y+h > int(1000*scale): continue
 
-            cv2.putText(imgContour, "Points: " + str(len(approx)), (x + w + 20, y + 20), cv2.FONT_HERSHEY_COMPLEX, .7,
-                        (0, 255, 0), 2)
-            cv2.putText(imgContour, "Area: " + str(int(area)), (x + w + 20, y + 45), cv2.FONT_HERSHEY_COMPLEX, .7,
-                        (0, 255, 0), 2)
-            cv2.putText(imgContour, "Blur: " + str(int(blur)), (x + w + 20, y + 70), cv2.FONT_HERSHEY_COMPLEX, .7,
-                        (0, 255, 0), 2)
+            cv2.rectangle(img_box, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            blur = cv2.Laplacian(img_small, cv2.CV_64F).var()
 
-            if saveData:
-                if count % moduleVal == 0 and blur > minBlur:
-                    nowTime = time.time()
-                    x = int(x / scale * scaleSaved)
-                    y = int(y / scale * scaleSaved)
-                    w = int(w / scale * scaleSaved)
-                    h = int(h / scale * scaleSaved)
-                    boxedImage = img[y: y + h, x: x + w]
-                    cv2.imwrite(myPath + str(countFolder) + '/' + str(countSave) + "_" + str(int(blur)) + "_" + str(
-                        nowTime) + ".png", boxedImage)
-                    countSave += 1
-    return countSave
+            cv2.putText(img_contour, "Points: " + str(len(approx)), (x + w + 20, y + 20), font, .7, (0, 255, 0), 2)
+            cv2.putText(img_contour, "Area: " + str(int(area)), (x + w + 20, y + 45), font, .7, (0, 255, 0), 2)
+            cv2.putText(img_contour, "Blur: " + str(int(blur)), (x + w + 20, y + 70), font, .7, (0, 255, 0), 2)
+
+            if save_data and blur > minimal_blur:
+                now_time = time.time()
+                x = scaleCoordinate(x)
+                y = scaleCoordinate(y)
+                w = scaleCoordinate(w)
+                h = scaleCoordinate(h)
+
+                img_boxed = img[y: y + h, x: x + w]
+
+                cv2.imwrite(path_images + str(count_folder) + '/' + str(count_saved_images) + "_" + str(int(blur)) + "_" + str(now_time) + ".png", img_boxed)
+                count_saved_images += 1
+    return count_saved_images
 
 
-if saveData: FolderToSave()
+def main(count, count_saved_images):
+    while True:
+        success, img = cap.read()
+        if not success:
+            print("Can't receive web-cam image")
+            break
 
-count = 0
-countSave = 0
-while True:
-    success, img = cap.read()
-    if not success:
-        print("Can't receive web-cam image")
-        break
+        img = img[0:1080, 400:1520]
 
-    img = img[0:1080,400:1520]
+        img_small = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+        img = cv2.resize(img, (0, 0), fx=scale_saved_images, fy=scale_saved_images)
+        img_contour = img_small.copy()
+        img_box = img_small.copy()
 
-    imgSmall = cv2.resize(img, (0, 0), fx=scale, fy=scale)
-    img = cv2.resize(img, (0, 0), fx=scaleSaved, fy=scaleSaved)
-    imgContour = imgSmall.copy()
-    imgBox = imgSmall.copy()
+        img_blur = cv2.GaussianBlur(img_small, (7, 7), 1)
+        img_gray = cv2.cvtColor(img_blur, cv2.COLOR_BGR2GRAY)
+        img_canny = cv2.Canny(img_gray, 45, 20)
 
-    imgBlur = cv2.GaussianBlur(imgSmall, (7, 7), 1)
-    imgGray = cv2.cvtColor(imgBlur, cv2.COLOR_BGR2GRAY)
+        kernel = np.ones((5, 5))
+        img_dilate = cv2.dilate(img_canny, kernel, iterations=1)
 
-    first = cv2.getTrackbarPos("first", "options")
-    second = cv2.getTrackbarPos("second", "options")
-    kernalv = cv2.getTrackbarPos("kernalv", "options")
+        count_saved_images = saveData(count_saved_images, img, img_small, img_contour, img_box, img_dilate)
+        count += 1
 
-    imgCanny = cv2.Canny(imgGray, first, second)
+        img_stacked = StackImages.stackImages(1, ([img_small, img_canny, img_dilate],
+                                                  [img_contour, img_box, img_box]))
 
-    kernel = np.ones((kernalv, kernalv))
-    imgDil = cv2.dilate(imgCanny, kernel, iterations=1)
+        print("count:", count, " countSave:", count_saved_images)
 
-    countSave = saveData(countSave)
-    count += 1
+        cv2.imshow('result', img_stacked)
 
-    imgStack = stackImages(1, ([imgSmall, imgCanny, imgDil], [imgContour, imgBox, imgBox]))
-
-    print("count:", count, " countSave:", countSave)
-
-    cv2.imshow('result', imgStack)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        print("exit")
-        break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("exit")
+            break
 
 
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    if saveData:  folderToSave()
+    main(count, count_saved_images)
+    cap.release()
+    cv2.destroyAllWindows()
+
