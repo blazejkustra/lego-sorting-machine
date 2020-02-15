@@ -13,7 +13,7 @@ Camera records LEGO bricks (transported on special conveyor belt), computer proc
 ### Generated images
 
 LEGO bricks images can be also generated using 3D models, which are available online. 
-More informations here: https://github.com/Forlify/lego-image-generator
+More informations here: https://github.com/Forlify/lego-images-generator
  
 ## Identifying LEGO bricks
 
