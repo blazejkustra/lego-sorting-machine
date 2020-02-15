@@ -8,7 +8,7 @@ My first AI project. Written in Python (OpenCV, Keras, TensorFlow and more).
 
 Camera records LEGO bricks (transported on special conveyor belt), computer process images and saves labeled data.
 
-![generating-data](img/generating-data.gif)
+<img src="img/generating-data.gif" width="100%" height="100%" />
 
 ### Generated images
 
@@ -19,4 +19,4 @@ More informations here: https://github.com/Forlify/lego-images-generator
 
 After training, we can start to recognize LEGO bricks! 
 
-![recognition](img/recognition.gif)
+<img src="img/recognition.gif" width="100%" height="100%" />
