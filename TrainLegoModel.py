@@ -16,11 +16,11 @@ from keras.preprocessing.image import ImageDataGenerator
 
 ################# Parameters #####################
 
-path = "myData"  # folder with all the class folders
+path = "learning-data"  # folder with all the class folders
 labels_file = 'labels.csv'  # file with all names of classes
 batch_size_val = 50  # how many to process together
 steps_per_epoch_val = 2000
-epochs_val = 1
+epochs_val = 5
 img_size = 32
 image_dimensions = (img_size, img_size, 3)
 test_ratio = 0.2  # if 1000 images split will 200 for testing
@@ -28,25 +28,32 @@ validation_ratio = 0.2  # if 1000 images 20% of remaining 800 will be 160 for va
 
 ################# Import images ##################
 
-count = 0
+
+def DeleteAllHiddenFiles(array):
+    for i in range(0, len(array)-1):
+        if array[i].startswith('.'):
+            array.pop(i)
+    return array
+
+
 images = []
 class_numbers = []
-number_of_classes = len(os.listdir(path)) - 1  # WORKS ONLY ON MAC/for windows +1
-print("Total Classes Detected: ", number_of_classes)
+class_ids = DeleteAllHiddenFiles(os.listdir(path))
+
+number_of_classes = len(class_ids)
+print("Total Classes Detected: ", class_ids)
 print("Importing Classes...")
-for x in range(0, number_of_classes):
-    if ".DS_Store" in str(x): continue
-    picture_list = os.listdir(path + "/" + str(count))
 
-    for y in picture_list:
-        if ".DS_Store" in str(y): continue
-        current_img = cv2.imread(path + "/" + str(count) + "/" + y)
-        current_img = cv2.resize(current_img, (32, 32))
-        images.append(current_img)
-        class_numbers.append(count)
+for class_id in class_ids:
+    pictures = DeleteAllHiddenFiles(os.listdir(path + "/" + str(class_id)))
 
-    print(count, end=" ")
-    count += 1
+    for picture in pictures:
+        img = cv2.imread(path + "/" + str(class_id) + "/" + picture)
+        img = cv2.resize(img, (32, 32))
+        images.append(img)
+        class_numbers.append(class_id)
+
+    print(class_id, end=" ")
 
 print(" ")
 
@@ -87,24 +94,39 @@ print("label file shape: ", labels.shape)
 num_of_samples = []
 cols = 5
 
-num_classes = number_of_classes
-fig, axs = plt.subplots(nrows=num_classes, ncols=cols, figsize=(5, number_of_classes))
+fig, axs = plt.subplots(nrows=number_of_classes, ncols=cols, figsize=(5, number_of_classes))
 fig.tight_layout()
+#
+#
+# for j, row in labels.iterrows():
+#     x_selected1 = X_train[y_train == int(row["ClassId"])]
+#     x_selected2 = X_train[y_train == row["ClassId"]]
+#     x_selected3 = X_train[y_train == j]
+#
+#
+#     print(x_selected1)
+#     print(x_selected2)
+#     print(x_selected3)
+#     print(y_train)
+#     print()
+
+
+
 
 for i in range(cols):
     for j, row in labels.iterrows():
-        x_selected = X_train[y_train == j]
+        x_selected = X_train[y_train == str(row["ClassId"])]
         axs[j][i].imshow(x_selected[random.randint(0, len(x_selected) - 1), :, :], cmap=plt.get_cmap("gray"))
         axs[j][i].axis("off")
         if i == 2:
-            axs[j][i].set_title(str(j) + "-" + row["Name"])
+            axs[j][i].set_title(str(row["ClassId"]) + "-" + str(row["Name"]))
             num_of_samples.append(len(x_selected))
 
 ########## Number of images plot ###############
 
 print("number of images of each class: ", num_of_samples)
 plt.figure(figsize=(12, 4))
-plt.bar(range(0, num_classes), num_of_samples)
+plt.bar(range(0, number_of_classes), num_of_samples)
 plt.title("Distribution of the training dataset")
 plt.xlabel("Class number")
 plt.ylabel("Number of images")
@@ -143,8 +165,8 @@ X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], X_test.shape[2], 1)
 
 ########### Augmentation of images ################
 
-data_generator = ImageDataGenerator(width_shift_range=0.05,
-                                    height_shift_range=0.05,
+data_generator = ImageDataGenerator(width_shift_range=0.1,
+                                    height_shift_range=0.1,
                                     zoom_range=0.1,  # 0.2 MEANS CAN GO FROM 0.8 TO 1.2
                                     shear_range=0.1,  # MAGNITUDE OF SHEAR ANGLE
                                     rotation_range=10)  # DEGREES
@@ -161,14 +183,22 @@ for i in range(15):
     axs[i].axis('off')
 plt.show()
 
+
+def classIDtoVector(y_set):
+    y_train_temp = []
+    for y in y_set:
+        y_train_temp.append(class_ids.index(y))
+    return y_train_temp
+
+
 y_train = to_categorical(y_train, number_of_classes)
-y_validation = to_categorical(y_validation, number_of_classes)
-y_test = to_categorical(y_test, number_of_classes)
+y_validation = to_categorical(classIDtoVector(y_validation), number_of_classes)
+y_test = to_categorical(classIDtoVector(y_test), number_of_classes)
 
 ######## Convulution neural network model #########
 
 
-def myModel():
+def Model():
     no_Of_Filters = 60
     size_of_Filter = (5, 5)  # THIS IS THE KERNEL THAT MOVE AROUND THE IMAGE TO GET THE FEATURES.
     # THIS WOULD REMOVE 2 PIXELS FROM EACH BORDER WHEN USING 32 32 IMAGE
@@ -196,10 +226,11 @@ def myModel():
 
 #################### Training #####################
 
-model = myModel()
+model = Model()
 print(model.summary())
 history = model.fit_generator(data_generator.flow(X_train, y_train, batch_size=batch_size_val),
-                              steps_per_epoch=steps_per_epoch_val, epochs=epochs_val,
+                              steps_per_epoch=steps_per_epoch_val,
+                              epochs=epochs_val,
                               validation_data=(X_validation, y_validation), shuffle=1)
 
 ################ Plot results #####################
@@ -214,7 +245,7 @@ plt.figure(2)
 plt.plot(history.history['accuracy'])
 plt.plot(history.history['val_accuracy'])
 plt.legend(['training', 'validation'])
-plt.title('Acurracy')
+plt.title('Accuracy')
 plt.xlabel('epoch')
 plt.show()
 

@@ -3,3 +3,5 @@ myDataSign
 Images
 venv
 data
+__pycache__
+learning-data
